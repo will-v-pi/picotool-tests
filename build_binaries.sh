@@ -36,10 +36,9 @@
 #
 set -euo pipefail
 
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"      # .../picotool/test
-REPO_ROOT="$(cd "$HERE/.." && pwd)"                        # .../picotool
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"      # .../picotool-tests
 
-DEPS_DIR="${PICOTOOL_TEST_DEPS_DIR:-$HERE/_deps}"
+DEPS_DIR="${PICOTOOL_TEST_DEPS_DIR:-$REPO_ROOT/_deps}"
 
 PICO_SDK_REPO="${PICO_SDK_REPO:-https://github.com/raspberrypi/pico-sdk.git}"
 PICO_SDK_BRANCH="${PICO_SDK_BRANCH:-develop}"
@@ -48,8 +47,8 @@ PICO_EXAMPLES_BRANCH="${PICO_EXAMPLES_BRANCH:-develop}"
 
 PICO_SDK_PATH="${PICO_SDK_PATH:-$DEPS_DIR/pico-sdk}"
 PICO_EXAMPLES_PATH="${PICO_EXAMPLES_PATH:-$DEPS_DIR/pico-examples}"
-BUILD_ROOT="${PICOTOOL_TEST_BUILD_ROOT:-$HERE/_work}"
-OUT_ROOT="$HERE/binaries"
+BUILD_ROOT="${PICOTOOL_TEST_BUILD_ROOT:-$REPO_ROOT/_work}"
+OUT_ROOT="$REPO_ROOT/binaries"
 PICOTOOL_INSTALL_DIR="${PICOTOOL_INSTALL_DIR:-$REPO_ROOT/install}"
 
 echo "picotool test binary builder"
@@ -179,7 +178,7 @@ build_board() {
 # binaries/<chip>/tools/.
 build_tool() {
     local board="$1" chip="$2" name="$3"
-    local src="$HERE/tools/$name"
+    local src="$REPO_ROOT/tools/$name"
     local bdir="$BUILD_ROOT/$name-$board"
     local out="$OUT_ROOT/$chip/tools"
     mkdir -p "$out"
