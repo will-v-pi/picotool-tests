@@ -296,7 +296,7 @@ class DeviceManager:
             self._wait(
                 lambda: self.app_visible(chip),
                 timeout or self.reboot_timeout,
-                interval=1.0,
+                interval=0.2,
             )
         )
 
@@ -521,27 +521,40 @@ class DeviceManager:
         )
         self._wait(lambda: self.find_bootsel(board.chip), self.bootsel_timeout)
 
-    def _load_and_boot(self, chip: str, uf2, erase: bool = False):
-        """Load `uf2` onto the in-BOOTSEL `chip` and reboot into it."""
+    def _load_and_boot(self, board: "Board", uf2, erase: bool = False) -> bool:
+        """Load `uf2` onto the in-BOOTSEL `board` and reboot into it."""
+        chip = board.chip
         dev = self.find_bootsel(chip)
         if dev is None:
-            return
+            return False
         if erase:
             self.pt.run("erase", "-a", *dev.selector, timeout=120)
-            dev = self.find_bootsel(chip) or dev
-        self.pt.run("load", *dev.selector, str(uf2), timeout=90)
+            # The bootrom caches the partition table until it reboots.
+            BootselSession(self, board).reboot_rescan()
+            dev = self.find_bootsel(chip)
+            if dev is None:
+                return False
+        if not self.pt.run("load", *dev.selector, str(uf2), timeout=90).ok:
+            return False
         cur = self.find_bootsel(chip)
         if cur:
             self.pt.run("reboot", *cur.selector, timeout=self.reboot_timeout)
         self._wait(lambda: not self.find_bootsel(chip), self.reboot_timeout)
+        return True
+
+    def _app_running(self, chip: str, usb_app: bool) -> bool:
+        if usb_app:
+            return self.wait_app_visible(chip)
+        # hello_serial isn't visible on USB
+        return self.find_bootsel(chip) is None
 
     def flash_app(self, board: "Board", usb_app: bool = True):
         """Restore a known-good USB application (hello_usb) onto `board`.
 
-        Loads over USB when the board is in BOOTSEL. If the app fails to
-        enumerate (e.g. a leftover partition table redirects the boot), the
-        flash is erased and the app re-loaded. Falls back to the debug probe
-        when the board is not in BOOTSEL.
+        Loads over USB when the board is in BOOTSEL. If the load is rejected or
+        the app fails to boot (e.g. a leftover partition table), the flash is
+        erased and the app re-loaded. Falls back to the debug probe when the
+        board is not in BOOTSEL.
 
         Set usb_app=False to use a non-USB application
         """
@@ -549,13 +562,11 @@ class DeviceManager:
         uf2 = bset.get("hello_usb", "uf2") if usb_app else bset.get("hello_serial", "uf2")
         dev = self.find_bootsel(board.chip)
         if dev is not None and uf2:
-            self._load_and_boot(board.chip, uf2)
-            if self.wait_app_visible(board.chip):
+            if self._load_and_boot(board, uf2) and self._app_running(board.chip, usb_app):
                 return
             # Boot failed - wipe flash (drops any partition table) and retry.
             self.ensure_bootsel(board)
-            self._load_and_boot(board.chip, uf2, erase=True)
-            if self.wait_app_visible(board.chip):
+            if self._load_and_boot(board, uf2, erase=True) and self._app_running(board.chip, usb_app):
                 return
         # Not in BOOTSEL (or USB restore failed) - use the debug probe.
         if not self.use_openocd:

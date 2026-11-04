@@ -93,7 +93,7 @@ class TestSave:
             dev.ok("load", str(fw.path("blink.uf2")))
             dev.ok("save", "-r", "0x10000000", "0x10010000", str(saved))
             # Round-trip: erase, reload the saved UF2, and re-verify blink.
-            dev.ok("erase", "-a", timeout=120)
+            dev.ok("erase", "-r", "0x10000000", "0x10010000")
             dev.ok("load", str(saved))
             assert dev.run("verify", str(fw.path("blink.uf2"))).ok
 

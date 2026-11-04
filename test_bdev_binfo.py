@@ -6,6 +6,8 @@ embedded in the firmware (the bi_bdev helper, tools/bi_bdev). picotool reads tha
 straight out of flash and needs no `-p` / partition arguments - the same
 mechanism MicroPython / CircuitPython use. Runs on both RP2040 and RP2350.
 """
+import re
+
 import pytest
 
 pytestmark = [pytest.mark.hardware, pytest.mark.slow]
@@ -22,8 +24,10 @@ def binfo_bdev(board, fw):
     # Setup inside the try so the BOOTSEL-exit cleanup still runs if erase/load
     # raises partway through.
     try:
-        dev.ok("erase", "-a", timeout=120)
         dev.ok("load", str(uf2))
+        m = re.search(r"embedded drive:\s+(0x[0-9a-f]+)-(0x[0-9a-f]+)", dev.ok("info", "-a").out)
+        assert m, "bi_bdev drive not found in binary info"
+        dev.ok("erase", "-r", m.group(1), m.group(2))
         yield dev
     finally:
         ctx.__exit__(None, None, None)
